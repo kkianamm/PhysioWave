@@ -9,6 +9,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class AttentionPooling(nn.Module):
+    def __init__(self, embed_dim):
+        super().__init__()
+        self.attn = nn.Linear(embed_dim, 1)
+
+    def forward(self, x):
+        """
+        x: (B, T, D)
+        returns: (B, D)
+        """
+        scores = self.attn(x)              # (B, T, 1)
+        weights = torch.softmax(scores, 1) # (B, T, 1)
+        pooled = (x * weights).sum(dim=1)  # (B, D)
+        return pooled
+
 class ClassificationHead(nn.Module):
     """
     Classification Head
@@ -18,6 +33,7 @@ class ClassificationHead(nn.Module):
                  pooling='mean', activation='gelu', use_norm=True):
         super().__init__()
         self.pooling = pooling
+        self.attn_pool = AttentionPooling(embed_dim) if pooling == "attention" else None
         
         # Build MLP layers
         if hidden_dims is None:
@@ -68,9 +84,8 @@ class ClassificationHead(nn.Module):
             # Use first token as CLS token
             return x[:, 0]
         elif self.pooling == 'attention':
-            # Attention pooling (simplified version)
-            attention_weights = torch.softmax(x.mean(dim=-1), dim=1)  # [B, N]
-            return torch.sum(x * attention_weights.unsqueeze(-1), dim=1)  # [B, C]
+            # Learnable attention pooling
+            return self.attn_pool(x)
         else:
             raise ValueError(f"Unknown pooling method: {self.pooling}")
             
@@ -102,6 +117,7 @@ class MultiLabelClassificationHead(nn.Module):
                  label_smoothing=0.0, use_class_weights=False):
         super().__init__()
         self.pooling = pooling
+        self.attn_pool = AttentionPooling(embed_dim) if pooling == "attention" else None
         self.num_labels = num_labels
         self.label_smoothing = label_smoothing
         self.use_class_weights = use_class_weights
@@ -152,8 +168,7 @@ class MultiLabelClassificationHead(nn.Module):
         elif self.pooling == 'cls':
             return x[:, 0]
         elif self.pooling == 'attention':
-            attention_weights = torch.softmax(x.mean(dim=-1), dim=1)
-            return torch.sum(x * attention_weights.unsqueeze(-1), dim=1)
+            return self.attn_pool(x)
         else:
             raise ValueError(f"Unknown pooling method: {self.pooling}")
             
@@ -262,7 +277,9 @@ class RegressionHead(nn.Module):
                  pooling='mean', activation='gelu', use_norm=True, output_activation=None):
         super().__init__()
         self.pooling = pooling
+        self.attn_pool = AttentionPooling(embed_dim) if pooling == "attention" else None
         self.output_activation = output_activation
+
         
         # Build MLP layers
         if hidden_dims is None:
@@ -302,8 +319,7 @@ class RegressionHead(nn.Module):
         elif self.pooling == 'last':
             return x[:, -1]
         elif self.pooling == 'attention':
-            attention_weights = torch.softmax(x.mean(dim=-1), dim=1)
-            return torch.sum(x * attention_weights.unsqueeze(-1), dim=1)
+            return self.attn_pool(x)
         else:
             raise ValueError(f"Unknown pooling method: {self.pooling}")
             
