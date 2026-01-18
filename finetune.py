@@ -174,7 +174,7 @@ def load_pretrained_feature_extractor(model, pretrained_path, rank=0):
     if rank == 0:
         print(f"Loading pretrained feature extractor from {pretrained_path}")
     
-    checkpoint = torch.load(pretrained_path, map_location='cpu')
+    checkpoint = torch.load(pretrained_path, map_location='cpu', weights_only=False)
     
     if 'model_state_dict' in checkpoint:
         pretrained_dict = checkpoint['model_state_dict']
@@ -639,7 +639,7 @@ def main_worker(rank, world_size, args):
     if test_loader:
         if rank == 0:
             print("\n===> Testing with best model <===")
-            checkpoint = torch.load(os.path.join(args.output_dir, "best_model.pth"))
+            checkpoint = torch.load(os.path.join(args.output_dir, "best_model.pth"), weights_only=False)
             model.module.load_state_dict(checkpoint['model_state_dict'])
         dist.barrier()
         for param in model.parameters(): 
@@ -720,9 +720,10 @@ def main():
     parser.add_argument('--num_classes', type=int, required=True, help='Number of classes')
     parser.add_argument('--head_hidden_dim', type=int, default=None, help='Classification head hidden dimension')
     parser.add_argument('--head_dropout', type=float, default=0.1, help='Classification head dropout')
-    parser.add_argument('--pooling', type=str, default='mean',
-                        choices=['mean', 'max', 'first', 'last'],
-                        help='Pooling strategy for classification')
+    parser.add_argument("--pooling", type=str, default="mean",
+                        choices=["mean", "max", "first", "last", "attention"],
+                        )
+
     
     # Position embedding parameters
     parser.add_argument('--use_pos_embed', action='store_true', default=True, help='Use position embedding')
